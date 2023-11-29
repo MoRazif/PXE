@@ -1,0 +1,146 @@
+#!ipxe
+
+set boot-url http://${next-server}
+#set iscsi-server ${next-server}
+#set iscsi-target iscsi:${iscsi-server}::::${iqn}
+#set iscsi-target iscsi:${iscsi-server}::::iqn.2005-10.org.freenas.ctl:zvol
+set nfs-server ${next-server}
+set cifs-server //${next-server}
+
+# Setup some basic convenience variables
+set menu-timeout 5000
+set submenu-timeout ${menu-timeout}
+
+# Ensure we have menu-default set to something
+isset ${menu-default} || set menu-default exit
+
+######## MAIN MENU ###################
+:start
+menu Welcome to QA-PXE Boot Menu
+item
+item --gap -- ---------------------------- Utilities ---------------------------------
+item Macrium7   Boot Macrium Image Recovery (Server Edition)
+item --key n xyz   Boot From Netboot.xyz (Netboot from Internet)
+item Hiren  Boot Hiren Boot CD
+item Memtest86  Boot Memtest86 Memory Testing Tool
+item --gap -- ------------------------------- OS -------------------------------------
+item Windows10   Install Windows 10x64
+item Windows11   Install Windows 11x64
+item Windows2019   Install Windows Server 2019x64
+item Windows2022   Install Windows Server 2022x64
+item Linux   Linux Distro (Future)
+item 
+item  
+item --gap -- ---------------------------- iPXE Option ---------------------------------
+item config     Configure settings
+item shell      Enter iPXE shell
+item reboot     Reboot
+item exit       Exit (boot local disk)
+item --gap -- ---------------------------------------------------------- M.Razif_2023 --
+choose --default exit --timeout 20000 target && goto ${target}
+
+########## UTILITY ITEMS ####################
+:shell
+echo Type exit to get the back to the menu
+shell
+set menu-timeout 0
+goto start
+
+:failed
+echo Booting failed, dropping to shell
+goto shell
+
+:reboot
+reboot
+
+:exit
+exit
+
+:cancel
+echo You cancelled the menu, dropping you to a shell
+ 
+:config
+config
+goto start
+ 
+:back
+set submenu-timeout 0
+clear submenu-default
+goto start
+
+############### Main Menu ###########
+:Macrium7
+sanboot --no-describe ${boot-url}/iso/MacriumRescue.iso
+goto start
+
+
+:Hiren
+sanboot --no-describe ${boot-url}/iso/HBCD_PE_x64.iso
+goto start
+
+:Memtest86
+sanboot --no-describe ${boot-url}/iso/MT86.iso
+goto start
+
+:xyz
+echo Going to netboox.xyz
+chain --autofree http://boot.netboot.xyz
+boot || goto failed
+goto start
+
+:Windows10
+kernel ${boot-url}/wimboot gui
+initrd ${boot-url}/installs/windows/win10/winpeshl.ini     winpeshl.ini
+initrd ${boot-url}/installs/windows/win10/install.bat      install.bat 
+initrd ${boot-url}/installs/windows/win10/boot/bcd         BCD
+initrd ${boot-url}/installs/windows/win10/boot/boot.sdi    boot.sdi
+initrd ${boot-url}/boot.wim boot.wim
+boot || goto failed
+
+:Windows11
+kernel ${boot-url}/wimboot gui
+initrd ${boot-url}/installs/windows/win11/winpeshl.ini     winpeshl.ini
+initrd ${boot-url}/installs/windows/win11/install.bat      install.bat
+initrd ${boot-url}/installs/windows/win11/boot/bcd         BCD
+initrd ${boot-url}/installs/windows/win11/boot/boot.sdi    boot.sdi
+initrd ${boot-url}/boot.wim boot.wim
+boot || goto failed
+
+:Windows2019
+kernel ${boot-url}/wimboot gui
+initrd ${boot-url}/installs/windows/win2019/winpeshl.ini     winpeshl.ini
+initrd ${boot-url}/installs/windows/win2019/install.bat      install.bat
+initrd ${boot-url}/installs/windows/win2019/boot/bcd         BCD
+initrd ${boot-url}/installs/windows/win2019/boot/boot.sdi    boot.sdi
+initrd ${boot-url}/boot.wim boot.wim
+boot || goto failed
+
+:Windows2022
+kernel ${boot-url}/wimboot gui
+initrd ${boot-url}/installs/windows/win2022/winpeshl.ini     winpeshl.ini
+initrd ${boot-url}/installs/windows/win2022/install.bat      install.bat
+initrd ${boot-url}/installs/windows/win2022/boot/bcd         BCD
+initrd ${boot-url}/installs/windows/win2022/boot/boot.sdi    boot.sdi
+initrd ${boot-url}/boot.wim boot.wim
+boot || goto failed
+
+:Linux
+initrd ${boot-url}/Linux/UBuntu/casper/initrd
+kernel ${boot-url}/Linux/UBuntu/casper/vmlinuz root=/dev/nfs initrd=initrd boot=casper netboot=nfs nfsroot=${dhcp-server}:/D/QA_PxeServer/files/Linux/UBuntu splash
+boot || goto failed
+
+
+#######################################################
+  
+#Memdisk via iPXE vs. ISO Boot HTTP via iPXE:
+#
+#Memdisk via iPXE does the following things: 
+#1) Emulates a CD-ROM allowing a Network-Based Install. 
+#2) Masks actual system RAM because the environment memdisk creates "hides" a certain amount of RAM to allow for the ISO - This amount is generally 2x ISO Size (Maximum 2GB - I think).
+#3) Preloads the ISO into memory before executing the ISO. This slows boot time a bit.
+#
+#ISO Boot over HTTP via iPXE:
+#1) Does not emulate a CD-ROM. It is a Block Device.
+#2) Does not mask system RAM.
+#3) Executes as it reads: Faster than memdisk and no "preloading" of the ISO is required.
+#4) Does not hold the ISO as a readable device once the ISO is loaded unless loaded into the iBFT.
